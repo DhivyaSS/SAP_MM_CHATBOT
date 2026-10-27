@@ -3,20 +3,30 @@ import json
 from typing import List, Dict, Any, Optional
 from app.database import get_db_connection
 from app.config import settings
+from app.services.chroma_store import ChromaVectorStoreService
 
 logger = logging.getLogger(__name__)
 
 
 class PGVectorStoreService:
     """
-    Manages vector persistence and similarity search against PostgreSQL with pgvector extension.
+    Unified vector store service supporting both local ChromaDB and PostgreSQL + pgvector.
+    Defaults to ChromaDB for zero-dependency local execution, or pgvector when configured.
     """
 
-    @staticmethod
-    def is_document_ingested(document_name: str) -> bool:
+    @classmethod
+    def _use_chroma(cls) -> bool:
+        backend = getattr(settings, "VECTOR_STORE_TYPE", "chroma").lower()
+        return backend == "chroma"
+
+    @classmethod
+    def is_document_ingested(cls, document_name: str) -> bool:
         """
         Checks whether a document with the given name has already been ingested.
         """
+        if cls._use_chroma():
+            return ChromaVectorStoreService.is_document_ingested(document_name)
+
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -26,17 +36,59 @@ class PGVectorStoreService:
             conn.close()
             return count > 0
         except Exception as e:
-            logger.error(f"Error checking document ingestion status: {e}")
-            return False
+            logger.warning(f"PostgreSQL check failed, falling back to local ChromaDB: {e}")
+            return ChromaVectorStoreService.is_document_ingested(document_name)
 
-    @staticmethod
-    def save_chunks(chunks: List[Dict[str, Any]], embeddings: List[List[float]]) -> int:
+    @classmethod
+    def save_chunks(cls, chunks: List[Dict[str, Any]], embeddings: List[List[float]]) -> int:
         """
-        Inserts document chunks along with their 768-dim embeddings into PostgreSQL.
+        Inserts document chunks along with their embeddings into vector storage.
         """
         if not chunks or len(chunks) != len(embeddings):
             raise ValueError("Chunks list and embeddings list must be non-empty and of equal length.")
 
+        if cls._use_chroma():
+            return ChromaVectorStoreService.save_chunks(chunks, embeddings)
+
+        try:
+            return cls._pg_save_chunks(chunks, embeddings)
+        except Exception as e:
+            logger.warning(f"PostgreSQL save failed, falling back to local ChromaDB: {e}")
+            return ChromaVectorStoreService.save_chunks(chunks, embeddings)
+
+    @classmethod
+    def similarity_search(cls, query_vector: List[float], top_k: int = None) -> List[Dict[str, Any]]:
+        """
+        Performs Cosine Similarity search to return top-k matching chunks sorted by relevance.
+        """
+        if cls._use_chroma():
+            return ChromaVectorStoreService.similarity_search(query_vector, top_k=top_k)
+
+        try:
+            return cls._pg_similarity_search(query_vector, top_k=top_k)
+        except Exception as e:
+            logger.warning(f"PostgreSQL search failed, falling back to local ChromaDB: {e}")
+            return ChromaVectorStoreService.similarity_search(query_vector, top_k=top_k)
+
+    @classmethod
+    def list_documents(cls) -> List[Dict[str, Any]]:
+        """
+        Get overview of all ingested documents and chunk totals.
+        """
+        if cls._use_chroma():
+            return ChromaVectorStoreService.list_documents()
+
+        try:
+            return cls._pg_list_documents()
+        except Exception as e:
+            logger.warning(f"PostgreSQL list_documents failed, falling back to local ChromaDB: {e}")
+            return ChromaVectorStoreService.list_documents()
+
+    # -------------------------------------------------------------------------
+    # PostgreSQL + pgvector Internal Methods
+    # -------------------------------------------------------------------------
+    @classmethod
+    def _pg_save_chunks(cls, chunks: List[Dict[str, Any]], embeddings: List[List[float]]) -> int:
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -49,7 +101,6 @@ class PGVectorStoreService:
         inserted_count = 0
         try:
             for chunk, emb in zip(chunks, embeddings):
-                # Format embedding as string '[v1, v2, ...]' for pgvector input
                 emb_str = f"[{','.join(map(str, emb))}]"
                 metadata_json = json.dumps(chunk.get("metadata", {}))
 
@@ -76,19 +127,14 @@ class PGVectorStoreService:
 
         return inserted_count
 
-    @staticmethod
-    def similarity_search(query_vector: List[float], top_k: int = None) -> List[Dict[str, Any]]:
-        """
-        Performs Cosine Similarity search on document_chunks using pgvector's `<=>` distance operator.
-        Returns top-k matching chunks sorted by relevance.
-        """
+    @classmethod
+    def _pg_similarity_search(cls, query_vector: List[float], top_k: int = None) -> List[Dict[str, Any]]:
         k = top_k or settings.TOP_K
         emb_str = f"[{','.join(map(str, query_vector))}]"
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Cosine distance: 0 = identical, 2 = opposite. Similarity = 1 - distance.
         search_query = """
         SELECT 
             id,
@@ -132,11 +178,8 @@ class PGVectorStoreService:
 
         return results
 
-    @staticmethod
-    def list_documents() -> List[Dict[str, Any]]:
-        """
-        Get overview of all ingested documents and chunk totals.
-        """
+    @classmethod
+    def _pg_list_documents(cls) -> List[Dict[str, Any]]:
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -163,9 +206,14 @@ class PGVectorStoreService:
                     "ingested_at": str(r[3])
                 })
         except Exception as e:
-            logger.error(f"Error querying document summary: {e}")
+            logger.error(f"Error querying document summary from PostgreSQL: {e}")
+            raise e
         finally:
             cursor.close()
             conn.close()
 
         return docs
+
+
+# Alias for clean architecture
+VectorStoreService = PGVectorStoreService

@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 200
     TOP_K: int = 4
 
+    # Vector Store Backend: 'chroma' (local) or 'pgvector' (PostgreSQL)
+    VECTOR_STORE_TYPE: str = "chroma"
+    CHROMA_PERSIST_DIRECTORY: str = "./data/chroma"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

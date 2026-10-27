@@ -20,13 +20,16 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Application lifespan manager: initializing PostgreSQL schema on startup.
+    Application lifespan manager: initializing vector store on startup.
     """
     logger.info("Initializing SAP MM RAG Assistant application...")
-    try:
-        init_db()
-    except Exception as e:
-        logger.warning(f"Could not connect to PostgreSQL on startup (Docker container may still be starting): {e}")
+    if getattr(settings, "VECTOR_STORE_TYPE", "chroma").lower() == "pgvector":
+        try:
+            init_db()
+        except Exception as e:
+            logger.warning(f"Could not connect to PostgreSQL on startup: {e}")
+    else:
+        logger.info(f"Using local ChromaDB vector store at '{settings.CHROMA_PERSIST_DIRECTORY}'. (No PostgreSQL/Docker required).")
     yield
     logger.info("Shutting down application...")
 

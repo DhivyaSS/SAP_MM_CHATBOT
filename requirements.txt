@@ -6,6 +6,7 @@ pydantic-settings>=2.2.0
 python-multipart>=0.0.9
 
 # Database & Vector Store
+chromadb>=0.4.24
 psycopg2-binary>=2.9.9
 pgvector>=0.2.5
 sqlalchemy>=2.0.28

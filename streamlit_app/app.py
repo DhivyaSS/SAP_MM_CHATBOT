@@ -70,7 +70,7 @@ def get_ingested_documents():
 
 # Header
 st.markdown('<div class="main-title">📦 SAP MM Intelligent Knowledge Assistant</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Grounded RAG Assistant powered by Google Gemini, PostgreSQL pgvector, LangChain & LangGraph</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Grounded RAG Assistant powered by Google Gemini, ChromaDB / pgvector, LangChain & LangGraph</div>', unsafe_allow_html=True)
 
 # System Health Check
 backend_online = check_backend_health()

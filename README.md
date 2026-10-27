@@ -1,6 +1,6 @@
 # 📦 SAP MM Intelligent Knowledge Assistant
 
-An end-to-end, production-style GenAI & RAG portfolio project built with **Python**, **FastAPI**, **PostgreSQL + pgvector**, **LangChain**, **LangGraph**, **Google Gemini API**, and **Streamlit**.
+An end-to-end, production-style GenAI & RAG portfolio project built with **Python**, **FastAPI**, **ChromaDB / PostgreSQL + pgvector**, **LangChain**, **LangGraph**, **Google Gemini API**, and **Streamlit**.
 
 The application allows users to upload SAP Materials Management (MM) learning notes, study materials, and PDFs, and ask natural-language questions grounded strictly in the uploaded documents.
 
@@ -123,30 +123,36 @@ Edit `.env` and set your `GEMINI_API_KEY`:
 GEMINI_API_KEY=your_actual_gemini_api_key_here
 ```
 
-### Step 2: Run with Docker Compose (Recommended)
-```bash
-docker-compose up --build
-```
-Access the applications at:
-- **Streamlit Frontend**: `http://localhost:8501`
-- **FastAPI Documentation**: `http://localhost:8000/docs`
+### Step 2: Run Locally with ChromaDB (Recommended — No Docker Required!)
+By default, the project is configured to use local **ChromaDB** (`VECTOR_STORE_TYPE=chroma`), storing vectors on disk in `./data/chroma`.
 
-### Step 3: Run Locally (Without Docker API)
-1. Start PostgreSQL with pgvector:
-   ```bash
-   docker-compose up -d postgres
-   ```
-2. Install Python dependencies:
+1. Install Python dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-3. Start FastAPI server:
+2. Start the FastAPI backend server:
    ```bash
    python -m uvicorn app.main:app --reload --port 8000
    ```
-4. Start Streamlit UI:
+3. In a second terminal, start the Streamlit UI:
    ```bash
    streamlit run streamlit_app/app.py
+   ```
+Access the application at:
+- **Streamlit Frontend**: `http://localhost:8501`
+- **FastAPI Documentation**: `http://localhost:8000/docs`
+
+---
+
+### Step 3: Optional — Run with Docker & PostgreSQL + pgvector
+If you prefer running with PostgreSQL and pgvector via Docker:
+1. In `.env`, set:
+   ```env
+   VECTOR_STORE_TYPE=pgvector
+   ```
+2. Run Docker Compose:
+   ```bash
+   docker compose up --build
    ```
 
 ---
